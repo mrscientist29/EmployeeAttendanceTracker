@@ -34,11 +34,7 @@ export default function AuthPage() {
   const { loginMutation, registerMutation, user } = useAuth();
   const [, navigate] = useLocation();
   
-  // Redirect to dashboard if already logged in
-  if (user) {
-    return <Redirect to="/" />;
-  }
-  
+  // Important: Always declare all hooks first before any conditional returns
   const loginForm = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
@@ -59,6 +55,11 @@ export default function AuthPage() {
       role: UserRole.EMPLOYEE,
     },
   });
+  
+  // Redirect to dashboard if already logged in (after all hooks are called)
+  if (user) {
+    return <Redirect to="/" />;
+  }
   
   const onLoginSubmit = (data: z.infer<typeof loginSchema>) => {
     loginMutation.mutate(data);
