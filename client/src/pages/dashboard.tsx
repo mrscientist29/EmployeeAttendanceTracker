@@ -1,7 +1,8 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { UserRole } from "@shared/schema";
+import { useCallback } from "react";
 
 // Temporary mock user for development
 const mockUser = {
@@ -16,39 +17,85 @@ const mockUser = {
 };
 
 export default function Dashboard() {
+  const [location, navigate] = useLocation();
+  
   // For demonstration, we're using a mock user while we fix the auth
   const user = mockUser;
   const isManager = user?.role === UserRole.MANAGER || user?.role === UserRole.ADMIN;
+  
+  const handleNavigation = useCallback((path: string) => () => {
+    navigate(path);
+  }, [navigate]);
+  
+  const handleLogout = useCallback(() => {
+    alert("Logout functionality will be implemented with authentication");
+  }, []);
+  
+  const handleExportReports = useCallback(() => {
+    alert("Export reports functionality will be implemented in the future");
+  }, []);
+  
+  const handleManageUsers = useCallback(() => {
+    navigate("/users");
+  }, [navigate]);
+  
+  const handleViewHistory = useCallback(() => {
+    navigate("/records");
+  }, [navigate]);
+  
+  const handleClockInOut = useCallback(() => {
+    alert("Clock In/Out functionality is currently being developed");
+  }, []);
   
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b">
         <div className="container mx-auto px-4 py-3 flex justify-between items-center">
-          <h1 className="text-xl font-bold">Employee Attendance System</h1>
+          <h1 
+            className="text-xl font-bold cursor-pointer" 
+            onClick={handleNavigation("/")}
+          >
+            Employee Attendance System
+          </h1>
           <nav className="hidden md:flex gap-6">
-            <Link href="/" className="text-sm font-medium hover:text-primary transition-colors">
+            <span 
+              className={`text-sm font-medium hover:text-primary transition-colors cursor-pointer ${location === "/" ? "text-primary" : ""}`}
+              onClick={handleNavigation("/")}
+            >
               Dashboard
-            </Link>
-            <Link href="/attendance" className="text-sm font-medium hover:text-primary transition-colors">
+            </span>
+            <span 
+              className={`text-sm font-medium hover:text-primary transition-colors cursor-pointer ${location === "/attendance" ? "text-primary" : ""}`}
+              onClick={handleNavigation("/attendance")}
+            >
               Attendance
-            </Link>
-            <Link href="/team" className="text-sm font-medium hover:text-primary transition-colors">
+            </span>
+            <span 
+              className={`text-sm font-medium hover:text-primary transition-colors cursor-pointer ${location === "/team" ? "text-primary" : ""}`}
+              onClick={handleNavigation("/team")}
+            >
               Team
-            </Link>
-            <Link href="/reports" className="text-sm font-medium hover:text-primary transition-colors">
+            </span>
+            <span 
+              className={`text-sm font-medium hover:text-primary transition-colors cursor-pointer ${location === "/reports" ? "text-primary" : ""}`}
+              onClick={handleNavigation("/reports")}
+            >
               Reports
-            </Link>
+            </span>
             {isManager && (
-              <Link href="/users" className="text-sm font-medium hover:text-primary transition-colors">
+              <span 
+                className={`text-sm font-medium hover:text-primary transition-colors cursor-pointer ${location === "/users" ? "text-primary" : ""}`}
+                onClick={handleNavigation("/users")}
+              >
                 Users
-              </Link>
+              </span>
             )}
           </nav>
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium hidden md:inline-block">
               {user.firstName} {user.lastName}
             </span>
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleLogout}>
               Log Out
             </Button>
           </div>
@@ -72,13 +119,13 @@ export default function Dashboard() {
             <div className="flex gap-2">
               {isManager ? (
                 <>
-                  <Button variant="outline" size="sm">Export Reports</Button>
-                  <Button size="sm">Manage Users</Button>
+                  <Button variant="outline" size="sm" onClick={handleExportReports}>Export Reports</Button>
+                  <Button size="sm" onClick={handleManageUsers}>Manage Users</Button>
                 </>
               ) : (
                 <>
-                  <Button variant="outline" size="sm">View History</Button>
-                  <Button size="sm">Clock In/Out</Button>
+                  <Button variant="outline" size="sm" onClick={handleViewHistory}>View History</Button>
+                  <Button size="sm" onClick={handleClockInOut}>Clock In/Out</Button>
                 </>
               )}
             </div>
@@ -117,8 +164,12 @@ export default function Dashboard() {
                     <div className="text-2xl font-bold">3</div>
                   </CardContent>
                   <CardFooter className="pt-0">
-                    <Button size="sm" variant="ghost" asChild>
-                      <Link href="/approvals">View all</Link>
+                    <Button 
+                      size="sm" 
+                      variant="ghost" 
+                      onClick={handleNavigation("/approvals")}
+                    >
+                      View all
                     </Button>
                   </CardFooter>
                 </Card>
@@ -209,15 +260,13 @@ export default function Dashboard() {
           </Card>
           
           {/* Note about Mock Data */}
-          {isManager && (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
-              <h3 className="font-medium text-amber-800">Development Note</h3>
-              <p className="text-sm text-amber-700 mt-1">
-                This is a mockup version of the dashboard with static data. In the complete implementation, 
-                this will be connected to the backend APIs and real-time data.
-              </p>
-            </div>
-          )}
+          <div className="p-4 bg-amber-50 border border-amber-200 rounded-md">
+            <h3 className="font-medium text-amber-800">Development Note</h3>
+            <p className="text-sm text-amber-700 mt-1">
+              This is a temporary mockup version of the dashboard with static data. 
+              Navigation is functional, but authentication and API calls are disabled while we fix the auth issue.
+            </p>
+          </div>
         </div>
       </main>
     </div>
