@@ -182,14 +182,18 @@ export const PDFExportButton: React.FC<PDFExportButtonProps> = ({ document, file
   <PDFDownloadLink 
     document={document} 
     fileName={`${filename}.pdf`}
-    className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm"
+    className="w-full block py-1.5 px-2" // Match the padding of other dropdown items
   >
-    {({ loading }) => (loading ? 'Generating PDF...' : 'Download PDF')}
+    {({ loading }) => (
+      <span className="text-red-600 font-medium">
+        {loading ? 'Generating PDF...' : 'PDF'}
+      </span>
+    )}
   </PDFDownloadLink>
 );
 
 // Export a function to create a data PDF
-export function createDataPDF(data: any[], title: string, subtitle?: string): React.ReactElement {
+export const createDataPDF = (data: any[], title: string, subtitle?: string): React.ReactElement => {
   if (data.length === 0) {
     return (
       <DataPDFDocument
@@ -212,4 +216,4 @@ export function createDataPDF(data: any[], title: string, subtitle?: string): Re
       rows={rows}
     />
   );
-}
+};

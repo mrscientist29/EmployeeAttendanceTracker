@@ -26,6 +26,8 @@ export default function Records() {
   const { data: attendanceRecords = [], isLoading } = useQuery<AttendanceRecord[]>({
     queryKey: ["/api/attendance/records"],
     retry: false,
+    // Add staleTime to avoid frequent refetches
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
   
   // Get summary stats

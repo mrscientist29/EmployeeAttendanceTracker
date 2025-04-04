@@ -43,8 +43,10 @@ export function ExportDropdown({ data, filename, title, subtitle }: ExportDropdo
         <DropdownMenuItem onClick={handleExcelExport} className="cursor-pointer">
           <span className="text-blue-600 font-medium">Excel</span>
         </DropdownMenuItem>
-        <DropdownMenuItem className="cursor-pointer">
-          <PDFExportButton document={pdfDocument} filename={filename} />
+        <DropdownMenuItem asChild>
+          <div className="w-full cursor-pointer">
+            <PDFExportButton document={pdfDocument} filename={filename} />
+          </div>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
