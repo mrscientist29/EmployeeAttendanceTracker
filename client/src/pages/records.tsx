@@ -5,11 +5,15 @@ import { useQuery } from "@tanstack/react-query";
 import { formatDate, formatTime, calculateDuration } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Filter, Download, Calendar } from "lucide-react";
+import { Filter, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useState } from "react";
+import { ExportDropdown } from "@/components/ui/export-dropdown";
+import { useAuth } from "@/hooks/use-auth";
+
+import { AttendanceRecord } from "@shared/schema";
 
 export default function Records() {
   const [dateRange, setDateRange] = useState({
@@ -19,8 +23,9 @@ export default function Records() {
   const [searchQuery, setSearchQuery] = useState("");
   
   // Fetch user's attendance records
-  const { data: attendanceRecords, isLoading } = useQuery({
+  const { data: attendanceRecords = [], isLoading } = useQuery<AttendanceRecord[]>({
     queryKey: ["/api/attendance/records"],
+    retry: false,
   });
   
   // Get summary stats
@@ -103,10 +108,14 @@ export default function Records() {
               </CardDescription>
             </div>
             
-            <Button variant="outline" className="flex items-center gap-1">
-              <Download className="h-4 w-4" />
-              <span>Export</span>
-            </Button>
+            {!isLoading && filteredRecords && (
+              <ExportDropdown 
+                data={filteredRecords}
+                filename={`attendance-records-${new Date().toISOString().slice(0, 10)}`}
+                title="Attendance Records"
+                subtitle={`${dateRange.start} to ${dateRange.end}`}
+              />
+            )}
           </div>
         </CardHeader>
         
@@ -190,7 +199,7 @@ export default function Records() {
                         {record.clockOutTime ? formatTime(record.clockOutTime) : "--"}
                       </TableCell>
                       <TableCell>
-                        {calculateDuration(record.clockInTime, record.clockOutTime)}
+                        {calculateDuration(record.clockInTime, record.clockOutTime || undefined)}
                       </TableCell>
                       <TableCell>
                         {record.overtime ? (
