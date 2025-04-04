@@ -3,33 +3,21 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { UserRole } from "@shared/schema";
 import { useCallback } from "react";
-
-// Temporary mock user for development
-const mockUser = {
-  id: 1,
-  username: "admin",
-  firstName: "Admin",
-  lastName: "User",
-  email: "admin@example.com",
-  department: "IT",
-  role: UserRole.ADMIN,
-  isActive: true
-};
+import { useAuth } from "@/hooks/use-auth";
 
 export default function Dashboard() {
   const [location, navigate] = useLocation();
+  const { user, logoutMutation } = useAuth();
   
-  // For demonstration, we're using a mock user while we fix the auth
-  const user = mockUser;
-  const isManager = user?.role === UserRole.MANAGER || user?.role === UserRole.ADMIN;
+  const isManager = user ? (user.role === UserRole.MANAGER || user.role === UserRole.ADMIN) : false;
   
   const handleNavigation = useCallback((path: string) => () => {
     navigate(path);
   }, [navigate]);
   
   const handleLogout = useCallback(() => {
-    alert("Logout functionality will be implemented with authentication");
-  }, []);
+    logoutMutation.mutate();
+  }, [logoutMutation]);
   
   const handleExportReports = useCallback(() => {
     alert("Export reports functionality will be implemented in the future");
@@ -92,11 +80,13 @@ export default function Dashboard() {
             )}
           </nav>
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium hidden md:inline-block">
-              {user.firstName} {user.lastName}
-            </span>
-            <Button variant="outline" size="sm" onClick={handleLogout}>
-              Log Out
+            {user ? (
+              <span className="text-sm font-medium hidden md:inline-block">
+                {user.firstName} {user.lastName}
+              </span>
+            ) : null}
+            <Button variant="outline" size="sm" onClick={handleLogout} disabled={logoutMutation.isPending}>
+              {logoutMutation.isPending ? "Logging out..." : "Log Out"}
             </Button>
           </div>
         </div>
