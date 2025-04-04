@@ -6,8 +6,12 @@ import {
 } from "@shared/schema";
 import session from "express-session";
 import createMemoryStore from "memorystore";
+import { db, pool } from "./db";
+import { eq, and, gte, lte, desc, lt } from "drizzle-orm";
+import connectPg from "connect-pg-simple";
 
 const MemoryStore = createMemoryStore(session);
+const PostgresSessionStore = connectPg(session);
 
 export interface IStorage {
   // User methods
@@ -42,7 +46,7 @@ export interface IStorage {
   getAuditLogsByUser(userId: number): Promise<AuditLog[]>;
   
   // Session store
-  sessionStore: session.SessionStore;
+  sessionStore: any; // Using any for session store type
 }
 
 export class MemStorage implements IStorage {
@@ -54,7 +58,7 @@ export class MemStorage implements IStorage {
   private attendanceIdCounter: number;
   private overtimeApprovalIdCounter: number;
   private auditLogIdCounter: number;
-  public sessionStore: session.SessionStore;
+  public sessionStore: any; // Using any for session store
 
   constructor() {
     this.users = new Map();
@@ -277,4 +281,219 @@ export class MemStorage implements IStorage {
   }
 }
 
-export const storage = new MemStorage();
+export class DatabaseStorage implements IStorage {
+  public sessionStore: any; // Session store type
+
+  constructor() {
+    this.sessionStore = new PostgresSessionStore({
+      pool,
+      createTableIfMissing: true
+    });
+  }
+
+  // User methods
+  async getUser(id: number): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.id, id));
+    return result[0];
+  }
+
+  async getUserByUsername(username: string): Promise<User | undefined> {
+    const result = await db.select().from(users).where(eq(users.username, username));
+    return result[0];
+  }
+
+  async createUser(userData: InsertUser): Promise<User> {
+    const result = await db.insert(users).values(userData).returning();
+    return result[0];
+  }
+
+  async updateUser(id: number, userData: Partial<User>): Promise<User | undefined> {
+    const result = await db.update(users)
+      .set(userData)
+      .where(eq(users.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async deactivateUser(id: number): Promise<boolean> {
+    const result = await db.update(users)
+      .set({ active: false })
+      .where(eq(users.id, id))
+      .returning();
+    
+    return result.length > 0;
+  }
+
+  async getAllUsers(): Promise<User[]> {
+    return await db.select().from(users);
+  }
+
+  async getAllActiveUsers(): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.active, true));
+  }
+
+  async getUsersByRole(role: UserRole): Promise<User[]> {
+    return await db.select().from(users).where(eq(users.role, role));
+  }
+
+  // Attendance methods
+  async createAttendanceRecord(recordData: InsertAttendanceRecord): Promise<AttendanceRecord> {
+    const result = await db.insert(attendanceRecords).values(recordData).returning();
+    return result[0];
+  }
+
+  async getAttendanceRecord(id: number): Promise<AttendanceRecord | undefined> {
+    const result = await db.select().from(attendanceRecords).where(eq(attendanceRecords.id, id));
+    return result[0];
+  }
+
+  async updateAttendanceRecord(
+    id: number, 
+    recordData: Partial<AttendanceRecord>
+  ): Promise<AttendanceRecord | undefined> {
+    const result = await db.update(attendanceRecords)
+      .set(recordData)
+      .where(eq(attendanceRecords.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async getUserAttendanceRecords(userId: number): Promise<AttendanceRecord[]> {
+    return await db.select()
+      .from(attendanceRecords)
+      .where(eq(attendanceRecords.userId, userId))
+      .orderBy(desc(attendanceRecords.clockInTime));
+  }
+
+  async getTodayAttendanceRecords(): Promise<AttendanceRecord[]> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    return await db.select()
+      .from(attendanceRecords)
+      .where(
+        and(
+          gte(attendanceRecords.clockInTime, today),
+          lt(attendanceRecords.clockInTime, tomorrow)
+        )
+      );
+  }
+
+  async getTodayAttendanceForUser(userId: number): Promise<AttendanceRecord | undefined> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const result = await db.select()
+      .from(attendanceRecords)
+      .where(
+        and(
+          eq(attendanceRecords.userId, userId),
+          gte(attendanceRecords.clockInTime, today),
+          lt(attendanceRecords.clockInTime, tomorrow)
+        )
+      );
+    
+    return result[0];
+  }
+
+  async getAttendanceByDateRange(startDate: Date, endDate: Date): Promise<AttendanceRecord[]> {
+    const start = new Date(startDate);
+    start.setHours(0, 0, 0, 0);
+    
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
+    
+    return await db.select()
+      .from(attendanceRecords)
+      .where(
+        and(
+          gte(attendanceRecords.clockInTime, start),
+          lte(attendanceRecords.clockInTime, end)
+        )
+      )
+      .orderBy(attendanceRecords.clockInTime);
+  }
+
+  // Overtime approval methods
+  async createOvertimeApproval(approvalData: InsertOvertimeApproval): Promise<OvertimeApproval> {
+    // Ensure status is set if not provided
+    const dataWithDefaults = {
+      ...approvalData,
+      status: approvalData.status || "pending",
+      requestDate: approvalData.requestDate || new Date()
+    };
+    
+    const result = await db.insert(overtimeApprovals).values(dataWithDefaults).returning();
+    return result[0];
+  }
+
+  async getOvertimeApproval(id: number): Promise<OvertimeApproval | undefined> {
+    const result = await db.select().from(overtimeApprovals).where(eq(overtimeApprovals.id, id));
+    return result[0];
+  }
+
+  async updateOvertimeApproval(
+    id: number, 
+    approvalData: Partial<OvertimeApproval>
+  ): Promise<OvertimeApproval | undefined> {
+    const result = await db.update(overtimeApprovals)
+      .set(approvalData)
+      .where(eq(overtimeApprovals.id, id))
+      .returning();
+    
+    return result[0];
+  }
+
+  async getPendingOvertimeApprovals(): Promise<OvertimeApproval[]> {
+    return await db.select()
+      .from(overtimeApprovals)
+      .where(eq(overtimeApprovals.status, "pending"))
+      .orderBy(desc(overtimeApprovals.requestDate));
+  }
+
+  async getUserPendingOvertimeApprovals(userId: number): Promise<OvertimeApproval[]> {
+    return await db.select()
+      .from(overtimeApprovals)
+      .where(
+        and(
+          eq(overtimeApprovals.userId, userId),
+          eq(overtimeApprovals.status, "pending")
+        )
+      )
+      .orderBy(desc(overtimeApprovals.requestDate));
+  }
+
+  // Audit log methods
+  async createAuditLog(logData: InsertAuditLog): Promise<AuditLog> {
+    // Set timestamp to current time if not provided
+    const dataWithTimestamp = {
+      ...logData,
+      timestamp: new Date()
+    };
+    
+    const result = await db.insert(auditLogs).values(dataWithTimestamp).returning();
+    return result[0];
+  }
+
+  async getAuditLogs(): Promise<AuditLog[]> {
+    return await db.select()
+      .from(auditLogs)
+      .orderBy(desc(auditLogs.timestamp));
+  }
+
+  async getAuditLogsByUser(userId: number): Promise<AuditLog[]> {
+    return await db.select()
+      .from(auditLogs)
+      .where(eq(auditLogs.userId, userId))
+      .orderBy(desc(auditLogs.timestamp));
+  }
+}
+
+// Create and export the database storage instead of memory storage
+export const storage = new DatabaseStorage();

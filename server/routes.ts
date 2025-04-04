@@ -5,6 +5,11 @@ import { setupAuth, requireRole, hashPassword } from "./auth";
 import { UserRole, insertUserSchema, insertAttendanceSchema, insertOvertimeApprovalSchema } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Add a health check endpoint
+  app.get("/api/health", (req, res) => {
+    res.status(200).json({ status: "ok", message: "Server is running", timestamp: new Date().toISOString() });
+  });
+  
   // Setup authentication routes
   setupAuth(app);
 
