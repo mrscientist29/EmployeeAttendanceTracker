@@ -14,7 +14,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   setupAuth(app);
 
   // User management routes (Admin only)
-  app.get("/api/users", requireRole([UserRole.ADMIN, UserRole.MANAGER]), async (req, res) => {
+  app.get("/api/users", requireRole([UserRole.ADMIN]), async (req, res) => {
     try {
       const users = await storage.getAllActiveUsers();
       // Filter out passwords
@@ -273,8 +273,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Join with user data
       const users = await storage.getAllUsers();
-      const recordsWithUserData = await Promise.all(filteredRecords.map(async (record) => {
-        const user = users.find(u => u.id === record.userId);
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const recordsWithUserData = filteredRecords.map(record => {
+        const user = userMap.get(record.userId);
         return {
           ...record,
           user: user ? {
@@ -286,7 +288,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: user.role
           } : null
         };
-      }));
+      });
       
       res.json(recordsWithUserData);
     } catch (error) {
@@ -301,8 +303,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Join with user data
       const users = await storage.getAllUsers();
-      const recordsWithUserData = await Promise.all(records.map(async (record) => {
-        const user = users.find(u => u.id === record.userId);
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const recordsWithUserData = records.map(record => {
+        const user = userMap.get(record.userId);
         return {
           ...record,
           user: user ? {
@@ -314,7 +318,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             role: user.role
           } : null
         };
-      }));
+      });
       
       res.json(recordsWithUserData);
     } catch (error) {
@@ -329,8 +333,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Join with user data
       const users = await storage.getAllUsers();
-      const approvalsWithUserData = await Promise.all(approvals.map(async (approval) => {
-        const user = users.find(u => u.id === approval.userId);
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const approvalsWithUserData = approvals.map(approval => {
+        const user = userMap.get(approval.userId);
         return {
           ...approval,
           user: user ? {
@@ -341,7 +347,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             department: user.department
           } : null
         };
-      }));
+      });
       
       res.json(approvalsWithUserData);
     } catch (error) {
@@ -415,8 +421,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Join with user data
       const users = await storage.getAllUsers();
-      const logsWithUserData = await Promise.all(logs.map(async (log) => {
-        const user = log.userId ? users.find(u => u.id === log.userId) : null;
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const logsWithUserData = logs.map(log => {
+        const user = log.userId ? userMap.get(log.userId) : null;
         return {
           ...log,
           user: user ? {
@@ -426,7 +434,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastName: user.lastName
           } : null
         };
-      }));
+      });
       
       res.json(logsWithUserData);
     } catch (error) {
@@ -459,8 +467,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Join user data with recent activity
       const allUsers = await storage.getAllUsers();
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+
       const activityWithUserData = recentActivity.map(log => {
-        const user = log.userId ? allUsers.find(u => u.id === log.userId) : null;
+        const user = log.userId ? userMap.get(log.userId) : null;
         return {
           ...log,
           user: user ? {
@@ -485,10 +495,50 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Export attendance data as CSV (for future implementation)
-  app.get("/api/export/attendance", requireRole([UserRole.MANAGER, UserRole.ADMIN]), (req, res) => {
-    // This would generate and return a CSV file in a real implementation
-    res.status(200).json({ message: "Export feature will be implemented in a future version" });
+// Export attendance data as CSV
+  app.get("/api/export/attendance", requireRole([UserRole.MANAGER, UserRole.ADMIN]), async (req, res) => {
+    try {
+      const startDate = req.query.start ? new Date(req.query.start as string) : undefined;
+      const endDate = req.query.end ? new Date(req.query.end as string) : undefined;
+
+      if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+        return res.status(400).json({ message: "Invalid or missing date range" });
+      }
+
+      const records = await storage.getAttendanceByDateRange(startDate, endDate);
+      const users = await storage.getAllUsers();
+      const userMap = new Map(users.map(u => [u.id, u]));
+
+      const recordsWithUserData = records.map(record => {
+        const user = userMap.get(record.userId);
+        return {
+          ID: record.id,
+          Employee: user ? `${user.firstName} ${user.lastName}` : 'N/A',
+          Department: user ? user.department : 'N/A',
+          'Clock In': record.clockInTime.toISOString(),
+          'Clock Out': record.clockOutTime ? record.clockOutTime.toISOString() : 'N/A',
+          Overtime: record.overtime ? 'Yes' : 'No',
+          'Overtime Hours': (record.overtimeHours || 0) / 100,
+        };
+      });
+
+      if (recordsWithUserData.length === 0) {
+        return res.status(404).json({ message: "No attendance records found for the selected date range" });
+      }
+
+      // Convert to CSV
+      const headers = Object.keys(recordsWithUserData[0]);
+      const csv = [
+        headers.join(','),
+        ...recordsWithUserData.map(row => headers.map(header => `"${row[header]}"`).join(','))
+      ].join('\n');
+
+      res.setHeader("Content-Type", "text/csv");
+      res.setHeader("Content-Disposition", `attachment; filename="attendance_${startDate.toISOString().split('T')[0]}_${endDate.toISOString().split('T')[0]}.csv"`);
+      res.status(200).send(csv);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to export attendance data" });
+    }
   });
 
   const httpServer = createServer(app);
