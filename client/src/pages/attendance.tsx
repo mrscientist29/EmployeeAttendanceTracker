@@ -1,16 +1,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Clock, History, Loader2 } from "lucide-react";
+import { CalendarDays, Clock, History, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { formatDate, formatTime, calculateDuration } from "@/lib/utils";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AttendanceRecord } from "@shared/schema";
 import { useQuery } from "@tanstack/react-query";
 import { ClockInOut } from "@/components/attendance/clock-in-out";
 import { useAuth } from "@/hooks/use-auth";
 import { AppLayout } from "@/components/layout/app-layout";
 
-// Simple page header component that matches the format in the rest of the app
 function MyPageHeader({ title, description }: { title: string; description?: string }) {
   return (
     <div className="mb-6">
@@ -33,29 +32,32 @@ interface AttendanceStatus {
   };
 }
 
+const RECORDS_PER_PAGE = 5;
+
 export default function Attendance() {
-  const [viewAll, setViewAll] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
   const { user } = useAuth();
   
-  // Fetch attendance status for today
   const { data: attendanceStatus, isLoading: isStatusLoading } = useQuery<AttendanceStatus>({
     queryKey: ["/api/attendance/status"],
     retry: false,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 30 * 1000,
   });
   
-  // Fetch attendance records
   const { data: attendanceRecords = [], isLoading: isRecordsLoading } = useQuery<AttendanceRecord[]>({
     queryKey: ["/api/attendance/records"],
     retry: false,
-    staleTime: 60 * 1000, // 1 minute
+    staleTime: 60 * 1000,
   });
   
-  // Filter records to show only the most recent few unless viewAll is true
-  const displayedRecords = viewAll 
-    ? attendanceRecords 
-    : attendanceRecords.slice(0, 5);
-  
+  const paginatedRecords = useMemo(() => {
+    const startIndex = (currentPage - 1) * RECORDS_PER_PAGE;
+    const endIndex = startIndex + RECORDS_PER_PAGE;
+    return attendanceRecords.slice(startIndex, endIndex);
+  }, [attendanceRecords, currentPage]);
+
+  const totalPages = Math.ceil(attendanceRecords.length / RECORDS_PER_PAGE);
+
   return (
     <AppLayout>
       <MyPageHeader 
@@ -65,7 +67,6 @@ export default function Attendance() {
       
       <div className="flex flex-col gap-6">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-          {/* Clock In/Out Card */}
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -84,7 +85,6 @@ export default function Attendance() {
             </CardContent>
           </Card>
           
-          {/* Current Status Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center">
@@ -153,7 +153,6 @@ export default function Attendance() {
           </Card>
         </div>
         
-        {/* Recent Activity */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center">
@@ -186,7 +185,7 @@ export default function Attendance() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {displayedRecords.map((record) => (
+                    {paginatedRecords.map((record) => (
                       <TableRow key={record.id}>
                         <TableCell>{formatDate(record.clockInTime)}</TableCell>
                         <TableCell>{formatTime(record.clockInTime)}</TableCell>
@@ -208,16 +207,31 @@ export default function Attendance() {
                   </TableBody>
                 </Table>
                 
-                {attendanceRecords.length > 5 && (
-                  <div className="mt-4 flex justify-center">
+                <div className="mt-4 flex justify-between items-center">
+                  <span className="text-sm text-muted-foreground">
+                    Page {currentPage} of {totalPages}
+                  </span>
+                  <div className="flex gap-2">
                     <Button
                       variant="outline"
-                      onClick={() => setViewAll(!viewAll)}
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
                     >
-                      {viewAll ? "Show Less" : `View All (${attendanceRecords.length})`}
+                      <ChevronLeft className="h-4 w-4 mr-1" />
+                      Previous
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                      <ChevronRight className="h-4 w-4 ml-1" />
                     </Button>
                   </div>
-                )}
+                </div>
               </>
             )}
           </CardContent>
